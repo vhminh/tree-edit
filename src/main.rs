@@ -23,13 +23,14 @@ fn get_paths_recursively(p: &path::PathBuf) -> io::Result<Vec<path::PathBuf>> {
     Ok(result)
 }
 
+#[derive(Debug)]
 struct Entry {
-    id: i64,
+    id: u64,
     path: String,
 }
 
 impl Entry {
-    fn new(id: i64, path: String) -> Self {
+    fn new(id: u64, path: String) -> Self {
         Entry { id, path }
     }
 }
@@ -65,7 +66,7 @@ fn get_tmp_file_name() -> String {
 
 fn user_edit_entries(entries: &Vec<Entry>) -> io::Result<Vec<Entry>> {
     let tmp_file = TmpFile::new(&get_tmp_file_name(), "txt")?;
-    // TODO: populate entries
+    fs::write(&tmp_file.path, entries_to_str(&entries))?;
     eprintln!("opening file {} in {}", tmp_file.path.display(), "nvim");
     let exit_code = process::Command::new("nvim")
         .arg(tmp_file.path.as_os_str())
@@ -75,13 +76,44 @@ fn user_edit_entries(entries: &Vec<Entry>) -> io::Result<Vec<Entry>> {
     Ok(Vec::new())
 }
 
+fn digit_count(val: u64) -> u32 {
+    if val == 0 {
+        1
+    } else {
+        val.ilog10() + 1
+    }
+}
+
+fn entries_to_str(entries: &Vec<Entry>) -> String {
+    let max_id = entries.iter().map(|e| e.id).max();
+    match max_id {
+        Some(max_id) => {
+            let id_col_len = digit_count(max_id) as usize;
+            entries
+                .iter()
+                .map(|e| format!("{:<id_col_len$} {}", e.id, e.path))
+                .collect::<Vec<String>>()
+                .join("\n")
+        }
+        None => String::from(""),
+    }
+}
+
+fn str_to_entry(s: &str) -> Entry {
+    todo!()
+}
+
 fn main() -> io::Result<()> {
     let paths = get_paths_recursively(&env::current_dir()?)?;
     let paths: Vec<String> = paths
         .iter()
         .map(|p| String::from(p.to_string_lossy()))
         .collect();
-    let entries: Vec<Entry> = paths.into_iter().map(|p| Entry::new(0, p)).collect();
+    let entries: Vec<Entry> = paths
+        .into_iter()
+        .enumerate()
+        .map(|tuple| Entry::new(tuple.0 as u64, tuple.1))
+        .collect();
     let new_entries = user_edit_entries(&entries);
     Ok(())
 }
