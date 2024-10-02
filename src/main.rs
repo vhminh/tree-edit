@@ -25,12 +25,12 @@ fn get_paths_recursively(p: &path::PathBuf) -> io::Result<Vec<path::PathBuf>> {
 
 #[derive(Debug)]
 struct Entry {
-    id: u64,
+    id: Option<u64>,
     path: String,
 }
 
 impl Entry {
-    fn new(id: u64, path: String) -> Self {
+    fn new(id: Option<u64>, path: String) -> Self {
         Entry { id, path }
     }
 }
@@ -71,9 +71,11 @@ fn user_edit_entries(entries: &Vec<Entry>) -> io::Result<Vec<Entry>> {
     let exit_code = process::Command::new("nvim")
         .arg(tmp_file.path.as_os_str())
         .spawn()?
-        .wait()?; // TODO: do something with status code
+        .wait()?;
     eprintln!("editor exit with {}", exit_code);
-    Ok(Vec::new())
+    // TODO: do something with status code
+    let content = fs::read_to_string(&tmp_file.path)?;
+    Ok(str_to_entries(&content))
 }
 
 fn digit_count(val: u64) -> u32 {
@@ -85,13 +87,13 @@ fn digit_count(val: u64) -> u32 {
 }
 
 fn entries_to_str(entries: &Vec<Entry>) -> String {
-    let max_id = entries.iter().map(|e| e.id).max();
+    let max_id = entries.iter().map(|e| e.id.unwrap()).max();
     match max_id {
         Some(max_id) => {
             let id_col_len = digit_count(max_id) as usize;
             entries
                 .iter()
-                .map(|e| format!("{:<id_col_len$} {}", e.id, e.path))
+                .map(|e| format!("{:<id_col_len$} {}", e.id.unwrap(), e.path))
                 .collect::<Vec<String>>()
                 .join("\n")
         }
@@ -99,8 +101,23 @@ fn entries_to_str(entries: &Vec<Entry>) -> String {
     }
 }
 
-fn str_to_entry(s: &str) -> Entry {
-    todo!()
+fn str_to_entries(s: &str) -> Vec<Entry> {
+    let lines = s.split("\n");
+    lines
+        .map(|l| l.trim())
+        .filter(|l| !l.is_empty())
+        .map(|line| {
+            let mut split = line.split_whitespace();
+            let maybe_id_str = split.next();
+            let maybe_id = maybe_id_str.and_then(|id_str| id_str.parse::<u64>().ok());
+            let path = match maybe_id {
+                Some(_) => &line[(maybe_id_str.unwrap().chars().count() + 1)..],
+                None => line,
+            }
+            .trim();
+            Entry::new(maybe_id, path.to_string())
+        })
+        .collect()
 }
 
 fn main() -> io::Result<()> {
@@ -112,8 +129,9 @@ fn main() -> io::Result<()> {
     let entries: Vec<Entry> = paths
         .into_iter()
         .enumerate()
-        .map(|tuple| Entry::new(tuple.0 as u64, tuple.1))
+        .map(|tuple| Entry::new(Some(tuple.0 as u64), tuple.1))
         .collect();
     let new_entries = user_edit_entries(&entries);
+    eprintln!("new entries {:?}", new_entries);
     Ok(())
 }
