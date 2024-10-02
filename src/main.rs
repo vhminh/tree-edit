@@ -1,4 +1,7 @@
-use std::{env, fs, io, path, process::{self, ExitStatus}};
+use std::{
+    env, fs, io, path,
+    process::{self, ExitStatus},
+};
 
 use rand::{distributions::Alphanumeric, Rng};
 
@@ -31,26 +34,44 @@ impl Entry {
     }
 }
 
-fn get_tmp_file_path() -> path::PathBuf {
-    let name: String = rand::thread_rng()
+struct TmpFile {
+    path: path::PathBuf,
+    _private: (), // please call TmpFile::new instead of initializing this directly
+}
+
+impl TmpFile {
+    fn new(filename: &str, ext: &str) -> io::Result<TmpFile> {
+        let mut path = env::temp_dir();
+        path.push(filename);
+        path.set_extension(ext);
+        let _ = fs::File::create(&path)?;
+        Ok(TmpFile { path, _private: () })
+    }
+}
+
+impl Drop for TmpFile {
+    fn drop(&mut self) {
+        fs::remove_file(&self.path).unwrap();
+    }
+}
+
+fn get_tmp_file_name() -> String {
+    rand::thread_rng()
         .sample_iter(&Alphanumeric)
         .take(12)
         .map(char::from)
-        .collect();
-    let mut path = env::temp_dir();
-    path.push(name);
-    path.set_extension("txt");
-    path
+        .collect()
 }
 
-fn edit_entries(entries: &Vec<Entry>) -> io::Result<Vec<Entry>> {
-    let tmp_file = get_tmp_file_path();
-    let _ = fs::File::create(&tmp_file)?;
+fn user_edit_entries(entries: &Vec<Entry>) -> io::Result<Vec<Entry>> {
+    let tmp_file = TmpFile::new(&get_tmp_file_name(), "txt")?;
     // TODO: populate entries
-    let exit_code = process::Command::new("vi")
-        .arg(tmp_file)
+    eprintln!("opening file {} in {}", tmp_file.path.display(), "nvim");
+    let exit_code = process::Command::new("nvim")
+        .arg(tmp_file.path.as_os_str())
         .spawn()?
         .wait()?; // TODO: do something with status code
+    eprintln!("editor exit with {}", exit_code);
     Ok(Vec::new())
 }
 
@@ -61,6 +82,6 @@ fn main() -> io::Result<()> {
         .map(|p| String::from(p.to_string_lossy()))
         .collect();
     let entries: Vec<Entry> = paths.into_iter().map(|p| Entry::new(0, p)).collect();
-    let new_entries = edit_entries(&entries);
+    let new_entries = user_edit_entries(&entries);
     Ok(())
 }
