@@ -180,7 +180,7 @@ fn apply(ops: &Vec<FsOp>) -> io::Result<()> {
         match op {
             FsOp::CreateFile { path } => {
                 let path = path::Path::new(path);
-                if !path.exists() {
+                if path.exists() {
                     panic!("path {} exists", path.display());
                 }
                 fs::File::create(path)?;
