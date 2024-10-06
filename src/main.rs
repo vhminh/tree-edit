@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     env, fs, io, path,
     process::{self, ExitStatus},
 };
@@ -120,6 +121,80 @@ fn str_to_entries(s: &str) -> Vec<Entry> {
         .collect()
 }
 
+/// assuming that all entries in `old_entries` has a unique id
+// TODO: use `Result` to return user errors
+fn diff<'a: 'b, 'b>(old_entries: &'a Vec<Entry>, new_entries: &'a Vec<Entry>) -> Vec<FsOp<'b>> {
+    let old_id_to_entries = {
+        let mut builder = HashMap::<u64, &str>::new();
+        for entry in old_entries {
+            builder.insert(entry.id.unwrap(), &entry.path);
+        }
+        builder
+    };
+    let new_id_to_entries = {
+        let mut builder = HashMap::<u64, Vec<&str>>::new();
+        for entry in new_entries {
+            if let Some(id) = entry.id {
+                let v = builder.entry(id).or_insert(Vec::new());
+                v.push(&entry.path);
+            }
+        }
+        builder
+    };
+    let copies = new_entries
+        .iter()
+        .filter(|e| e.id.is_some())
+        .filter_map(|e| {
+            let id = e.id.unwrap();
+            let old_path = old_id_to_entries.get(&id).unwrap(); // panics if id doesn't exist,
+                                                                // TODO: return as user error
+            if *old_path != e.path {
+                Some(FsOp::CopyFile {
+                    src: *old_path,
+                    dst: &e.path,
+                })
+            } else {
+                None
+            }
+        });
+    let creates = new_entries
+        .iter()
+        .filter(|e| e.id.is_none())
+        .map(|e| FsOp::CreateFile { path: &e.path });
+    let mut ops = Vec::new();
+    ops.append(&mut copies.collect());
+    ops.append(&mut creates.collect());
+    return ops;
+}
+
+#[derive(Debug)]
+enum FsOp<'a> {
+    CreateFile { path: &'a str },
+    MoveFile { path: String }, // currently unused
+    CopyFile { src: &'a str, dst: &'a str },
+    RemoveFile { path: String },
+}
+
+fn apply(ops: &Vec<FsOp>) -> io::Result<()> {
+    for op in ops {
+        match (op) {
+            FsOp::CreateFile { path } => {
+                let path = path::Path::new(path);
+                if !path.exists() {
+                    panic!("path {} exists", path.display())
+                }
+                fs::File::create(path)?;
+            }
+            FsOp::MoveFile { path } => todo!(),
+            FsOp::CopyFile { src, dst } => {
+                fs::copy(path::Path::new(src), path::Path::new(dst))?;
+            }
+            FsOp::RemoveFile { path } => todo!(),
+        }
+    }
+    Ok(())
+}
+
 fn main() -> io::Result<()> {
     let paths = get_paths_recursively(&env::current_dir()?)?;
     let paths: Vec<String> = paths
@@ -131,7 +206,9 @@ fn main() -> io::Result<()> {
         .enumerate()
         .map(|tuple| Entry::new(Some(tuple.0 as u64), tuple.1))
         .collect();
-    let new_entries = user_edit_entries(&entries);
-    eprintln!("new entries {:?}", new_entries);
+    let new_entries = user_edit_entries(&entries)?;
+    let ops = diff(&entries, &new_entries);
+    eprintln!("ops {:?}", ops);
+    apply(&ops)?;
     Ok(())
 }
