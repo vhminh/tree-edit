@@ -175,6 +175,26 @@ enum FsOp<'a> {
     RemoveFile { path: String },
 }
 
+fn display_ops(ops: &Vec<FsOp>) {
+    for op in ops {
+        match op {
+            FsOp::CreateFile { path } => {
+                eprintln!("\x1b[32mcreate {}", path)
+            }
+            FsOp::MoveFile { path } => todo!(),
+            FsOp::CopyFile { src, dst } => {
+                eprintln!("\x1b[32mcopy {} => {}\x1b[0m", src, dst)
+            }
+            FsOp::RemoveFile { path } => todo!(),
+        }
+    }
+}
+
+fn user_confirm() -> bool {
+    // TODO: ask to confirm [y/N]
+    true
+}
+
 fn apply(ops: &Vec<FsOp>) -> io::Result<()> {
     for op in ops {
         match op {
@@ -183,7 +203,10 @@ fn apply(ops: &Vec<FsOp>) -> io::Result<()> {
                 if path.exists() {
                     panic!("path {} exists", path.display());
                 }
-                fs::File::create(path)?;
+                fs::OpenOptions::new()
+                    .create(true)
+                    .write(true)
+                    .open(&path)?;
             }
             FsOp::MoveFile { path } => todo!(),
             FsOp::CopyFile { src, dst } => {
@@ -216,7 +239,9 @@ fn main() -> io::Result<()> {
         .collect();
     let new_entries = user_edit_entries(&entries)?;
     let ops = diff(&entries, &new_entries);
-    eprintln!("ops {:?}", ops);
-    apply(&ops)?;
+    display_ops(&ops);
+    if user_confirm() {
+        apply(&ops)?;
+    }
     Ok(())
 }
