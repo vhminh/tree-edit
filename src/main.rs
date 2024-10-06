@@ -177,17 +177,25 @@ enum FsOp<'a> {
 
 fn apply(ops: &Vec<FsOp>) -> io::Result<()> {
     for op in ops {
-        match (op) {
+        match op {
             FsOp::CreateFile { path } => {
                 let path = path::Path::new(path);
                 if !path.exists() {
-                    panic!("path {} exists", path.display())
+                    panic!("path {} exists", path.display());
                 }
                 fs::File::create(path)?;
             }
             FsOp::MoveFile { path } => todo!(),
             FsOp::CopyFile { src, dst } => {
-                fs::copy(path::Path::new(src), path::Path::new(dst))?;
+                let src = path::Path::new(src);
+                let dst = path::Path::new(dst);
+                if !src.exists() {
+                    panic!("path {} does not exist", src.display());
+                }
+                if dst.exists() {
+                    panic!("destination path {} already exists", dst.display());
+                }
+                fs::copy(src, dst)?;
             }
             FsOp::RemoveFile { path } => todo!(),
         }
