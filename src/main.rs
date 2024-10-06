@@ -203,6 +203,9 @@ fn apply(ops: &Vec<FsOp>) -> io::Result<()> {
                 if path.exists() {
                     panic!("path {} exists", path.display());
                 }
+                if let Some(parent) = path.parent() {
+                    fs::create_dir_all(parent)?;
+                }
                 fs::OpenOptions::new()
                     .create(true)
                     .write(true)
@@ -217,6 +220,9 @@ fn apply(ops: &Vec<FsOp>) -> io::Result<()> {
                 }
                 if dst.exists() {
                     panic!("destination path {} already exists", dst.display());
+                }
+                if let Some(dst_parent) = dst.parent() {
+                    fs::create_dir_all(dst_parent)?;
                 }
                 fs::copy(src, dst)?;
             }
