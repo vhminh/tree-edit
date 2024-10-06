@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     env, fs, io, path,
     process::{self, ExitStatus},
 };
@@ -124,6 +124,8 @@ fn str_to_entries(s: &str) -> Vec<Entry> {
 /// assuming that all entries in `old_entries` has a unique id
 // TODO: use `Result` to return user errors
 fn diff<'a: 'b, 'b>(old_entries: &'a Vec<Entry>, new_entries: &'a Vec<Entry>) -> Vec<FsOp<'b>> {
+    validate_old_entries(old_entries);
+    validate_new_entries(new_entries);
     let old_id_to_entries = {
         let mut builder = HashMap::<u64, &str>::new();
         for entry in old_entries {
@@ -165,6 +167,28 @@ fn diff<'a: 'b, 'b>(old_entries: &'a Vec<Entry>, new_entries: &'a Vec<Entry>) ->
     ops.append(&mut copies.collect());
     ops.append(&mut creates.collect());
     return ops;
+}
+
+// TODO: return user Error instead of panics
+fn validate_old_entries(entries: &Vec<Entry>) {
+    for entry in entries {
+        assert!(entry.id.is_some());
+    }
+    validate_unique_paths(entries);
+}
+
+fn validate_new_entries(entries: &Vec<Entry>) {
+    validate_unique_paths(entries);
+}
+
+fn validate_unique_paths(entries: &Vec<Entry>) {
+    let mut paths = HashSet::<&str>::new();
+    for entry in entries {
+        if paths.contains(&entry.path as &str) {
+            panic!("duplicate path {}", entry.path);
+        }
+        paths.insert(&entry.path);
+    }
 }
 
 #[derive(Debug)]
