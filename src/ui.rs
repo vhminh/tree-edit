@@ -1,11 +1,12 @@
 use std::{fs, io, process};
 
 use crate::entry::Entry;
+use crate::error::TreeEditError;
 use crate::fsutils::fsop::FsOp;
 use crate::fsutils::tmpfile;
 use crate::fsutils::tmpfile::TmpFile;
 
-pub fn user_edit_entries(entries: &Vec<Entry>) -> io::Result<Vec<Entry>> {
+pub fn user_edit_entries(entries: &Vec<Entry>) -> crate::Result<Vec<Entry>> {
     let tmp_file = TmpFile::new(&tmpfile::get_tmp_file_name(), "txt")?;
     fs::write(&tmp_file.path(), entries_to_str(&entries))?;
     eprintln!("opening file {} in {}", tmp_file.path().display(), "nvim");
@@ -13,8 +14,9 @@ pub fn user_edit_entries(entries: &Vec<Entry>) -> io::Result<Vec<Entry>> {
         .arg(tmp_file.path().as_os_str())
         .spawn()?
         .wait()?;
-    eprintln!("editor exit with {}", exit_code);
-    // TODO: do something with status code
+    if !exit_code.success() {
+        return Err(TreeEditError::EditorExitFailure(exit_code));
+    }
     let content = fs::read_to_string(&tmp_file.path())?;
     Ok(str_to_entries(&content))
 }
