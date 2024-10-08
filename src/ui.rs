@@ -65,7 +65,7 @@ pub fn display_ops(ops: &Vec<FsOp>) {
     for op in ops {
         match op {
             FsOp::CreateFile { path } => {
-                eprintln!("\x1b[32mcreate {}", path)
+                eprintln!("\x1b[32mcreate {}\x1b[0m", path)
             }
             FsOp::MoveFile { path } => todo!(),
             FsOp::CopyFile { src, dst } => {
