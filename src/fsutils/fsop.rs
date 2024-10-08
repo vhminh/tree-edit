@@ -1,5 +1,7 @@
 use std::{fs, io, path::Path};
 
+use crate::error::{DetectedBy, TreeEditError};
+
 #[derive(Debug)]
 pub enum FsOp<'a> {
     CreateFile { path: &'a str },
@@ -8,39 +10,53 @@ pub enum FsOp<'a> {
     RemoveFile { path: String },
 }
 
-pub fn apply(ops: &Vec<FsOp>) -> io::Result<()> {
-    for op in ops {
-        match op {
-            FsOp::CreateFile { path } => {
-                let path = Path::new(path);
-                if path.exists() {
-                    panic!("path {} exists", path.display());
-                }
-                if let Some(parent) = path.parent() {
-                    fs::create_dir_all(parent)?;
-                }
-                fs::OpenOptions::new()
-                    .create(true)
-                    .write(true)
-                    .open(&path)?;
+pub fn exec(op: &FsOp) -> crate::Result<()> {
+    match op {
+        FsOp::CreateFile { path: path_str } => {
+            let path = Path::new(path_str);
+            if path.exists() {
+                return Err(TreeEditError::FsChanged(DetectedBy::FileExists(
+                    path_str.to_string(),
+                )));
             }
-            FsOp::MoveFile { path } => todo!(),
-            FsOp::CopyFile { src, dst } => {
-                let src = Path::new(src);
-                let dst = Path::new(dst);
-                if !src.exists() {
-                    panic!("path {} does not exist", src.display());
-                }
-                if dst.exists() {
-                    panic!("destination path {} already exists", dst.display());
-                }
-                if let Some(dst_parent) = dst.parent() {
-                    fs::create_dir_all(dst_parent)?;
-                }
-                fs::copy(src, dst)?;
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent)?;
             }
-            FsOp::RemoveFile { path } => todo!(),
+            fs::OpenOptions::new()
+                .create(true)
+                .write(true)
+                .open(&path)?;
         }
+        FsOp::MoveFile { path } => todo!(),
+        FsOp::CopyFile {
+            src: src_str,
+            dst: dst_str,
+        } => {
+            let src = Path::new(src_str);
+            let dst = Path::new(dst_str);
+            if !src.exists() {
+                return Err(TreeEditError::FsChanged(DetectedBy::FileNotFound(
+                    src_str.to_string(),
+                )));
+            }
+            if dst.exists() {
+                return Err(TreeEditError::FsChanged(DetectedBy::FileExists(
+                    dst_str.to_string(),
+                )));
+            }
+            if let Some(dst_parent) = dst.parent() {
+                fs::create_dir_all(dst_parent)?;
+            }
+            fs::copy(src, dst)?;
+        }
+        FsOp::RemoveFile { path } => todo!(),
+    }
+    Ok(())
+}
+
+pub fn exec_all(ops: &Vec<FsOp>) -> crate::Result<()> {
+    for op in ops {
+        exec(&op)?;
     }
     Ok(())
 }

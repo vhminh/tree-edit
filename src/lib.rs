@@ -1,17 +1,22 @@
 mod entry;
+mod error;
 mod fsutils;
 mod ui;
 
 use std::{
     collections::{HashMap, HashSet},
-    env, io,
+    env,
 };
 
 use entry::Entry;
+use error::TreeEditError;
 use fsutils::fsop::FsOp;
 
-pub fn tree_edit() -> io::Result<()> {
-    let paths = fsutils::get_paths_recursively(&env::current_dir()?)?;
+pub type Result<T> = std::result::Result<T, TreeEditError>;
+
+pub fn tree_edit() -> Result<()> {
+    let current_dir = env::current_dir()?;
+    let paths = fsutils::get_paths_recursively(&current_dir)?;
     let paths: Vec<String> = paths
         .iter()
         .map(|p| String::from(p.to_string_lossy()))
@@ -25,7 +30,7 @@ pub fn tree_edit() -> io::Result<()> {
     let ops = diff(&entries, &new_entries);
     ui::display_ops(&ops);
     if ui::user_confirm() {
-        fsutils::fsop::apply(&ops)?;
+        fsutils::fsop::exec_all(&ops)?;
     }
     Ok(())
 }
