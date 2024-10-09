@@ -29,8 +29,11 @@ pub fn tree_edit() -> Result<()> {
     let new_entries = ui::user_edit_entries(&entries)?;
     let ops = diff(&entries, &new_entries);
     ui::display_ops(&ops);
-    if ui::user_confirm() {
+    if ops.is_empty() {
+        eprintln!("nothing to do")
+    } else if ui::user_confirm()? {
         fsutils::fsop::exec_all(&ops)?;
+        eprintln!("successfully applied {} operation(s)", ops.len())
     }
     Ok(())
 }

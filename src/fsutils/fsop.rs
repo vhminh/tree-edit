@@ -5,7 +5,7 @@ use crate::error::{DetectedBy, TreeEditError};
 #[derive(Debug)]
 pub enum FsOp<'a> {
     CreateFile { path: &'a str },
-    MoveFile { path: String }, // currently unused
+    MoveFile { src: &'a str, dst: &'a str }, // currently unused
     CopyFile { src: &'a str, dst: &'a str },
     RemoveFile { path: String },
 }
@@ -27,7 +27,7 @@ pub fn exec(op: &FsOp) -> crate::Result<()> {
                 .write(true)
                 .open(&path)?;
         }
-        FsOp::MoveFile { path } => todo!(),
+        FsOp::MoveFile { src, dst } => todo!(),
         FsOp::CopyFile {
             src: src_str,
             dst: dst_str,
