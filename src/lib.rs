@@ -5,6 +5,7 @@ mod ui;
 
 use std::{
     collections::{HashMap, HashSet},
+    convert::identity,
     env,
 };
 
@@ -64,19 +65,23 @@ fn diff<'a: 'b, 'b>(
     let copies = new_entries
         .iter()
         .filter(|e| e.id.is_some())
-        .filter_map(|e| {
+        .map(|e| {
             let id = e.id.unwrap();
-            let old_path = old_id_to_entries.get(&id).unwrap(); // panics if id doesn't exist,
-                                                                // TODO: return as user error
+            let old_path = old_id_to_entries
+                .get(&id)
+                .ok_or(TreeEditError::InvalidFileId(id))?;
             if *old_path != e.path {
-                Some(FsOp::CopyFile {
+                Ok::<Option<FsOp<'_>>, TreeEditError>(Some(FsOp::CopyFile {
                     src: *old_path,
                     dst: &e.path,
-                })
+                }))
             } else {
-                None
+                Ok(None)
             }
-        });
+        })
+        .collect::<Result<Vec<_>>>()?
+        .into_iter()
+        .filter_map(identity);
     let creates = new_entries
         .iter()
         .filter(|e| e.id.is_none())
