@@ -27,7 +27,7 @@ pub fn tree_edit() -> Result<()> {
         .map(|tuple| entry::Entry::new(Some(tuple.0 as u64), tuple.1))
         .collect();
     let new_entries = ui::user_edit_entries(&entries)?;
-    let ops = diff(&entries, &new_entries);
+    let ops = diff(&entries, &new_entries)?;
     ui::display_ops(&ops);
     if ops.is_empty() {
         eprintln!("nothing to do")
@@ -38,11 +38,12 @@ pub fn tree_edit() -> Result<()> {
     Ok(())
 }
 
-/// assuming that all entries in `old_entries` has a unique id
-// TODO: use `Result` to return user errors
-fn diff<'a: 'b, 'b>(old_entries: &'a Vec<Entry>, new_entries: &'a Vec<Entry>) -> Vec<FsOp<'b>> {
-    validate_old_entries(old_entries);
-    validate_new_entries(new_entries);
+fn diff<'a: 'b, 'b>(
+    old_entries: &'a Vec<Entry>,
+    new_entries: &'a Vec<Entry>,
+) -> Result<Vec<FsOp<'b>>> {
+    validate_old_entries(&old_entries);
+    validate_new_entries(&new_entries)?;
     let old_id_to_entries = {
         let mut builder = HashMap::<u64, &str>::new();
         for entry in old_entries {
@@ -83,27 +84,38 @@ fn diff<'a: 'b, 'b>(old_entries: &'a Vec<Entry>, new_entries: &'a Vec<Entry>) ->
     let mut ops = Vec::new();
     ops.append(&mut copies.collect());
     ops.append(&mut creates.collect());
-    return ops;
+    Ok(ops)
 }
 
-// TODO: return user Error instead of panics
+// all errors causes by our internal generated entries should panic
 fn validate_old_entries(entries: &Vec<Entry>) {
+    // all must have an id
     for entry in entries {
-        assert!(entry.id.is_some());
+        assert!(entry.id.is_some(), "entry does not have an id {:?}", entry);
     }
-    validate_unique_paths(entries);
+    // ids must be unique
+    let mut ids = HashSet::<u64>::new();
+    for entry in entries {
+        let id = entry.id.unwrap();
+        assert!(!ids.contains(&id), "duplicate entry id {}", id);
+        ids.insert(id);
+    }
+    // paths must be unique
+    validate_unique_paths(entries).unwrap();
 }
 
-fn validate_new_entries(entries: &Vec<Entry>) {
-    validate_unique_paths(entries);
+fn validate_new_entries(entries: &Vec<Entry>) -> Result<()> {
+    validate_unique_paths(entries)?;
+    Ok(())
 }
 
-fn validate_unique_paths(entries: &Vec<Entry>) {
+fn validate_unique_paths(entries: &Vec<Entry>) -> Result<()> {
     let mut paths = HashSet::<&str>::new();
     for entry in entries {
         if paths.contains(&entry.path as &str) {
-            panic!("duplicate path {}", entry.path);
+            return Err(TreeEditError::DuplicatePath(entry.path.clone()));
         }
         paths.insert(&entry.path);
     }
+    Ok(())
 }
