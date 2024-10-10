@@ -1,3 +1,4 @@
-fn main() -> tree_edit::Result<()> {
-    tree_edit::tree_edit()
+fn main() -> anyhow::Result<()> {
+    tree_edit::tree_edit()?;
+    Ok(())
 }
