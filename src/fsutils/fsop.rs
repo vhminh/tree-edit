@@ -5,9 +5,9 @@ use crate::error::{DetectedBy, TreeEditError};
 #[derive(Debug)]
 pub enum FsOp<'a> {
     CreateFile { path: &'a str },
-    MoveFile { src: &'a str, dst: &'a str }, // currently unused
+    MoveFile { src: &'a str, dst: &'a str },
     CopyFile { src: &'a str, dst: &'a str },
-    RemoveFile { path: String },
+    RemoveFile { path: &'a str },
 }
 
 pub fn exec(op: &FsOp) -> crate::Result<()> {

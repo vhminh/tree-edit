@@ -66,16 +66,16 @@ fn str_to_entries(s: &str) -> Vec<Entry> {
 pub fn display_ops(ops: &Vec<FsOp>) {
     for op in ops {
         match op {
-            FsOp::CreateFile { path } => eprintln!("\x1b[32mcreate {}\x1b[0m", path),
-            FsOp::MoveFile { src, dst } => eprintln!("\x1b[33mmove {} => {}\x1b[0m", src, dst),
-            FsOp::CopyFile { src, dst } => eprintln!("\x1b[32mcopy {} => {}\x1b[0m", src, dst),
-            FsOp::RemoveFile { path } => eprintln!("\x1b[31mremove {}\x1b[0m", path),
+            FsOp::CreateFile { path } => eprintln!("\x1b[32mCREATE {}\x1b[0m", path),
+            FsOp::MoveFile { src, dst } => eprintln!("\x1b[33mMOVE   {} => {}\x1b[0m", src, dst),
+            FsOp::CopyFile { src, dst } => eprintln!("\x1b[32mCOPY   {} => {}\x1b[0m", src, dst),
+            FsOp::RemoveFile { path } => eprintln!("\x1b[31mREMOVE {}\x1b[0m", path),
         }
     }
 }
 
 pub fn user_confirm() -> io::Result<bool> {
-    eprint!("do you want to apply? [y/N] ");
+    eprint!("do you want to proceed? [y/N] ");
     let mut buffer = String::new();
     io::stdin().read_line(&mut buffer)?;
     let normalized = buffer.to_lowercase();
