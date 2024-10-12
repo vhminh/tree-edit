@@ -4,6 +4,7 @@ mod fsutils;
 mod ui;
 
 use std::{
+    borrow::Cow,
     collections::{HashMap, HashSet},
     convert::identity,
     env,
@@ -72,8 +73,8 @@ fn diff<'a: 'b, 'b>(
                 .ok_or(TreeEditError::InvalidFileId(id))?;
             if *old_path != e.path {
                 Ok::<Option<FsOp<'_>>, TreeEditError>(Some(FsOp::CopyFile {
-                    src: *old_path,
-                    dst: &e.path,
+                    src: Cow::Borrowed(*old_path),
+                    dst: Cow::Borrowed(&e.path),
                 }))
             } else {
                 Ok(None)
@@ -85,7 +86,9 @@ fn diff<'a: 'b, 'b>(
     let creates = new_entries
         .iter()
         .filter(|e| e.id.is_none())
-        .map(|e| FsOp::CreateFile { path: &e.path });
+        .map(|e| FsOp::CreateFile {
+            path: Cow::Borrowed(&e.path),
+        });
     let mut ops = Vec::new();
     ops.append(&mut copies.collect());
     ops.append(&mut creates.collect());

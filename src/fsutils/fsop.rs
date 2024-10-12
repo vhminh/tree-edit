@@ -1,19 +1,29 @@
-use std::{fs, path::Path};
+use std::{borrow::Cow, fs, path::Path};
 
 use crate::error::{DetectedBy, TreeEditError};
 
 #[derive(Debug)]
 pub enum FsOp<'a> {
-    CreateFile { path: &'a str },
-    MoveFile { src: &'a str, dst: &'a str },
-    CopyFile { src: &'a str, dst: &'a str },
-    RemoveFile { path: &'a str },
+    CreateFile {
+        path: Cow<'a, str>,
+    },
+    MoveFile {
+        src: Cow<'a, str>,
+        dst: Cow<'a, str>,
+    },
+    CopyFile {
+        src: Cow<'a, str>,
+        dst: Cow<'a, str>,
+    },
+    RemoveFile {
+        path: Cow<'a, str>,
+    },
 }
 
 pub fn exec(op: &FsOp) -> crate::Result<()> {
     match op {
         FsOp::CreateFile { path: path_str } => {
-            let path = Path::new(path_str);
+            let path = Path::new(path_str.as_ref());
             if path.exists() {
                 return Err(TreeEditError::FsChanged(DetectedBy::FileExists(
                     path_str.to_string(),
@@ -32,8 +42,8 @@ pub fn exec(op: &FsOp) -> crate::Result<()> {
             src: src_str,
             dst: dst_str,
         } => {
-            let src = Path::new(src_str);
-            let dst = Path::new(dst_str);
+            let src = Path::new(src_str.as_ref());
+            let dst = Path::new(dst_str.as_ref());
             if !src.exists() {
                 return Err(TreeEditError::FsChanged(DetectedBy::FileNotFound(
                     src_str.to_string(),
