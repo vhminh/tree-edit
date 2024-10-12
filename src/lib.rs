@@ -4,7 +4,10 @@ mod fsutils;
 mod ui;
 
 use std::{
-    borrow::Cow, collections::{HashMap, HashSet}, convert::identity, env
+    borrow::Cow,
+    collections::{HashMap, HashSet},
+    convert::identity,
+    env,
 };
 
 use entry::Entry;
@@ -41,7 +44,6 @@ fn diff<'a: 'b, 'b>(
     old_entries: &'a Vec<Entry>,
     new_entries: &'a Vec<Entry>,
 ) -> Result<Vec<FsOp<'b>>> {
-    Cow::Borrowed
     validate_old_entries(&old_entries);
     validate_new_entries(&new_entries)?;
     let copy_rm_move_ops = move_files_around_ops(&old_entries, &new_entries)?;
@@ -136,17 +138,18 @@ fn move_files_around_ops<'a: 'b, 'b>(
         }
         builder
     };
-    let existing_names: HashSet<&str> = old_path_to_id.keys().cloned().collect();
-    let ops = Vec::<FsOp>::new();
+    let mut existing_names: HashSet<&str> = old_path_to_id.keys().cloned().collect();
+    let mut ops = Vec::<FsOp>::new();
     let mut locked = HashSet::<u64>::new();
     let mut process = |id: u64| -> () {
         let old_path = old_id_to_paths.get(&id).unwrap();
         if locked.contains(&id) {
             let backup_path = gen_backup_path(old_path, &existing_names);
-            //let a =  Cow::from(backup_path).as_ref();
+            assert!(existing_names.remove(*old_path));
+            assert!(existing_names.insert(&backup_path));
             ops.push(FsOp::CopyFile {
-                src: *old_path,
-                dst: Cow::from(backup_path).as_ref(),
+                src: Cow::Borrowed(old_path),
+                dst: Cow::Owned(backup_path),
             });
         }
         locked.insert(id);
@@ -168,8 +171,8 @@ fn move_files_around_ops<'a: 'b, 'b>(
                 .ok_or(TreeEditError::InvalidFileId(id))?;
             if *old_path != e.path {
                 Ok::<Option<FsOp<'_>>, TreeEditError>(Some(FsOp::CopyFile {
-                    src: *old_path,
-                    dst: &e.path,
+                    src: Cow::Borrowed(old_path),
+                    dst: Cow::Borrowed(&e.path),
                 }))
             } else {
                 Ok(None)
@@ -185,5 +188,7 @@ fn create_files_ops<'a: 'b, 'b>(new_entries: &'a Vec<Entry>) -> impl Iterator<It
     new_entries
         .iter()
         .filter(|e| e.id.is_none())
-        .map(|e| FsOp::CreateFile { path: &e.path })
+        .map(|e| FsOp::CreateFile {
+            path: Cow::Borrowed(&e.path),
+        })
 }
