@@ -1,4 +1,4 @@
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Entry {
     pub id: Option<u64>,
     pub path: String,
