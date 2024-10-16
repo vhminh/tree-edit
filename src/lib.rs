@@ -127,3 +127,116 @@ fn validate_unique_paths(entries: &Vec<Entry>) -> Result<()> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn no_change() -> Result<()> {
+        diff_and_apply_ops(
+            &vec![Entry::new(Some(1), "a.txt".to_string())],
+            &vec![Entry::new(Some(1), "a.txt".to_string())],
+        )
+    }
+
+    #[test]
+    fn test_create_1_new_file() -> Result<()> {
+        diff_and_apply_ops(
+            &vec![entry(1, "a.txt")],
+            &vec![entry(1, "a.txt"), new_entry("b.txt")],
+        )
+    }
+
+    #[test]
+    fn test_copy_an_existing_file() -> Result<()> {
+        diff_and_apply_ops(
+            &vec![entry(1, "a.txt")],
+            &vec![entry(1, "a.txt"), entry(1, "b.txt")],
+        )
+    }
+
+    #[test]
+    fn test_user_input_invalid_id() {
+        let result = diff_and_apply_ops(
+            &vec![entry(1, "a.txt")], // there was previously no entry with id 2
+            &vec![entry(1, "a.txt"), entry(2, "b.txt")],
+        );
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(matches!(err, TreeEditError::InvalidFileId(2)))
+    }
+
+    #[test]
+    fn test_copy_dependency_without_cycle() -> Result<()> {
+        diff_and_apply_ops(
+            &vec![entry(1, "a.txt"), entry(2, "b.txt")],
+            &vec![entry(1, "a.txt"), entry(1, "b.txt"), entry(2, "c.txt")],
+        )
+    }
+
+    #[test]
+    fn test_copy_dependency_without_cycle_rev() -> Result<()> {
+        diff_and_apply_ops(
+            &vec![entry(2, "b.txt"), entry(3, "c.txt")],
+            &vec![entry(2, "a.txt"), entry(3, "b.txt"), entry(3, "c.txt")],
+        )
+    }
+
+    #[test]
+    fn test_copy_dependency_with_cycle_of_2() -> Result<()> {
+        diff_and_apply_ops(
+            &vec![entry(1, "a.txt"), entry(2, "b.txt")],
+            &vec![entry(2, "a.txt"), entry(1, "b.txt")],
+        )
+    }
+
+    fn entry(id: u64, path: &str) -> Entry {
+        Entry::new(Some(id), String::from(path))
+    }
+
+    fn new_entry(path: &str) -> Entry {
+        Entry::new(None, String::from(path))
+    }
+
+    fn diff_and_apply_ops(old_entries: &Vec<Entry>, new_entries: &Vec<Entry>) -> Result<()> {
+        let ops = diff(old_entries, new_entries)?;
+        println!("ops: {ops:?}");
+        let mut fs = HashMap::<String, Option<u64>>::new();
+        for entry in old_entries {
+            assert_eq!(fs.insert(entry.path.clone(), Some(entry.id.unwrap())), None);
+        }
+        for op in ops {
+            match op {
+                FsOp::CreateFile { path } => {
+                    assert!(!fs.contains_key(path.as_ref()));
+                    fs.insert(path.to_string(), None);
+                }
+                FsOp::MoveFile { src, dst } => {
+                    assert!(fs.contains_key(src.as_ref()));
+                    assert!(!fs.contains_key(dst.as_ref()));
+                    let maybe_id = fs.remove(src.as_ref()).unwrap();
+                    fs.insert(dst.to_string(), maybe_id);
+                }
+                FsOp::CopyFile { src, dst } => {
+                    assert!(fs.contains_key(src.as_ref()));
+                    assert!(!fs.contains_key(dst.as_ref()));
+                    let maybe_id = fs.get(src.as_ref()).unwrap().clone();
+                    fs.insert(dst.to_string(), maybe_id);
+                }
+                FsOp::RemoveFile { path } => {
+                    assert!(fs.contains_key(path.as_ref()));
+                    fs.remove(path.as_ref());
+                }
+            }
+        }
+        let mut entries_after_apply: Vec<_> = fs
+            .into_iter()
+            .map(|(path, maybe_id)| -> Entry { Entry::new(maybe_id, path) })
+            .collect::<Vec<_>>();
+
+        entries_after_apply.sort_by(|a, b| a.path.as_str().cmp(b.path.as_str()));
+
+        assert_eq!(&entries_after_apply, new_entries);
+        Ok(())
+    }
+}
