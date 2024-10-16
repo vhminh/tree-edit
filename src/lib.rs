@@ -87,7 +87,7 @@ fn validate_unique_paths(entries: &Vec<Entry>) -> Result<()> {
     Ok(())
 }
 
-fn gen_backup_path(path: &str, existing_names: &HashSet<&str>) -> String {
+fn gen_backup_path(path: &str, existing_names: &HashSet<String>) -> String {
     // FIXME: this can have exponential runtime
     // if a lot of files has the same name as back up (rarely)
     for i in 0..(existing_names.len() + 4) {
@@ -96,7 +96,7 @@ fn gen_backup_path(path: &str, existing_names: &HashSet<&str>) -> String {
         } else {
             format!("{path}.backup-{i}")
         };
-        if !existing_names.contains(&tmp_path as &str) {
+        if !existing_names.contains(&tmp_path) {
             return tmp_path;
         }
     }
@@ -138,50 +138,63 @@ fn move_files_around_ops<'a: 'b, 'b>(
         }
         builder
     };
-    let mut existing_names: HashSet<&str> = old_path_to_id.keys().cloned().collect();
+    // FIXME: HashSet of Cow<'_, String> ???
+    let mut existing_names: HashSet<String> =
+        old_path_to_id.keys().cloned().map(String::from).collect();
     let mut ops = Vec::<FsOp>::new();
     let mut locked = HashSet::<u64>::new();
+    let mut dirty = HashMap::<u64, FsOp>::new();
     let mut process = |id: u64| -> () {
         let old_path = old_id_to_paths.get(&id).unwrap();
         if locked.contains(&id) {
             let backup_path = gen_backup_path(old_path, &existing_names);
             assert!(existing_names.remove(*old_path));
-            assert!(existing_names.insert(&backup_path));
+            assert!(existing_names.insert(backup_path.clone()));
             ops.push(FsOp::CopyFile {
                 src: Cow::Borrowed(old_path),
                 dst: Cow::Owned(backup_path),
             });
-        }
-        locked.insert(id);
-        // copy to new entries
-        let need_copy_to = new_id_to_path.get(&id).unwrap_or(&Vec::new());
+            dirty.insert(
+                id,
+                FsOp::CopyFile {
+                    src: Cow::Owned(backup_path.clone()),
+                    dst: Cow::Borrowed(),
+                },
+            )
+        } else {
+            locked.insert(id);
+            // copy to new entries
+            let new_paths = new_id_to_path.get(&id).unwrap_or(&Vec::new());
+            // keep the original entry?
 
-        locked.remove(&id);
+            locked.remove(&id);
+        }
     };
     for id in old_id_to_paths.keys() {
         process(*id);
     }
-    let ops = new_entries
-        .iter()
-        .filter(|e| e.id.is_some())
-        .map(|e| {
-            let id = e.id.unwrap();
-            let old_path = old_id_to_paths
-                .get(&id)
-                .ok_or(TreeEditError::InvalidFileId(id))?;
-            if *old_path != e.path {
-                Ok::<Option<FsOp<'_>>, TreeEditError>(Some(FsOp::CopyFile {
-                    src: Cow::Borrowed(old_path),
-                    dst: Cow::Borrowed(&e.path),
-                }))
-            } else {
-                Ok(None)
-            }
-        })
-        .collect::<Result<Vec<_>>>()?
-        .into_iter()
-        .filter_map(identity);
-    Ok(ops)
+    assert!(dirty.is_empty());
+    // let ops = new_entries
+    //     .iter()
+    //     .filter(|e| e.id.is_some())
+    //     .map(|e| {
+    //         let id = e.id.unwrap();
+    //         let old_path = old_id_to_paths
+    //             .get(&id)
+    //             .ok_or(TreeEditError::InvalidFileId(id))?;
+    //         if *old_path != e.path {
+    //             Ok::<Option<FsOp<'_>>, TreeEditError>(Some(FsOp::CopyFile {
+    //                 src: Cow::Borrowed(old_path),
+    //                 dst: Cow::Borrowed(&e.path),
+    //             }))
+    //         } else {
+    //             Ok(None)
+    //         }
+    //     })
+    //     .collect::<Result<Vec<_>>>()?
+    //     .into_iter()
+    //     .filter_map(identity);
+    Ok(ops.into_iter())
 }
 
 fn create_files_ops<'a: 'b, 'b>(new_entries: &'a Vec<Entry>) -> impl Iterator<Item = FsOp<'b>> {
