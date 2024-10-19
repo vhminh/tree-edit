@@ -46,52 +46,11 @@ fn diff<'a: 'b, 'b>(
 ) -> Result<Vec<FsOp<'b>>> {
     validate_old_entries(&old_entries);
     validate_new_entries(&new_entries)?;
-    let old_id_to_entries = {
-        let mut builder = HashMap::<u64, &str>::new();
-        for entry in old_entries {
-            builder.insert(entry.id.unwrap(), &entry.path);
-        }
-        builder
-    };
-    let new_id_to_entries = {
-        let mut builder = HashMap::<u64, Vec<&str>>::new();
-        for entry in new_entries {
-            if let Some(id) = entry.id {
-                let v = builder.entry(id).or_insert(Vec::new());
-                v.push(&entry.path);
-            }
-        }
-        builder
-    };
-    let copies = new_entries
-        .iter()
-        .filter(|e| e.id.is_some())
-        .map(|e| {
-            let id = e.id.unwrap();
-            let old_path = old_id_to_entries
-                .get(&id)
-                .ok_or(TreeEditError::InvalidFileId(id))?;
-            if *old_path != e.path {
-                Ok::<Option<FsOp<'_>>, TreeEditError>(Some(FsOp::CopyFile {
-                    src: Cow::Borrowed(*old_path),
-                    dst: Cow::Borrowed(&e.path),
-                }))
-            } else {
-                Ok(None)
-            }
-        })
-        .collect::<Result<Vec<_>>>()?
-        .into_iter()
-        .filter_map(identity);
-    let creates = new_entries
-        .iter()
-        .filter(|e| e.id.is_none())
-        .map(|e| FsOp::CreateFile {
-            path: Cow::Borrowed(&e.path),
-        });
+    let copy_rm_move_ops = move_files_around_ops(&old_entries, &new_entries)?;
+    let create_ops = create_files_ops(new_entries);
     let mut ops = Vec::new();
-    ops.append(&mut copies.collect());
-    ops.append(&mut creates.collect());
+    ops.append(&mut copy_rm_move_ops.collect());
+    ops.append(&mut create_ops.collect());
     Ok(ops)
 }
 
@@ -128,6 +87,167 @@ fn validate_unique_paths(entries: &Vec<Entry>) -> Result<()> {
     Ok(())
 }
 
+fn gen_backup_path(path: &str, existing_names: &HashSet<String>) -> String {
+    // FIXME: this can have exponential runtime
+    // if a lot of files has the same name as back up (rarely)
+    for i in 0..(existing_names.len() + 4) {
+        let tmp_path = if i == 0 {
+            format!("{path}.backup")
+        } else {
+            format!("{path}.backup-{i}")
+        };
+        if !existing_names.contains(&tmp_path) {
+            return tmp_path;
+        }
+    }
+    panic!("unreachable*")
+}
+
+fn move_files_around_ops<'a: 'b, 'b>(
+    old_entries: &'a Vec<Entry>,
+    new_entries: &'a Vec<Entry>,
+) -> Result<impl Iterator<Item = FsOp<'b>>> {
+    struct Lookup<'a> {
+        old_id_to_path: HashMap<u64, &'a str>,
+        old_path_to_id: HashMap<&'a str, u64>,
+        new_id_to_paths: HashMap<u64, Vec<&'a str>>,
+        new_path_to_id: HashMap<&'a str, Option<u64>>,
+    }
+    let lookup = Lookup {
+        old_id_to_path: {
+            let mut builder = HashMap::<u64, &str>::new();
+            for entry in old_entries {
+                builder.insert(entry.id.unwrap(), &entry.path);
+            }
+            builder
+        },
+        old_path_to_id: {
+            let mut builder = HashMap::<&str, u64>::new();
+            for entry in old_entries {
+                builder.insert(&entry.path, entry.id.unwrap());
+            }
+            builder
+        },
+        new_id_to_paths: {
+            let mut builder = HashMap::<u64, Vec<&str>>::new();
+            for entry in new_entries {
+                if let Some(id) = entry.id {
+                    let v = builder.entry(id).or_insert(Vec::new());
+                    v.push(&entry.path);
+                }
+            }
+            builder
+        },
+        new_path_to_id: {
+            let mut builder = HashMap::<&str, Option<u64>>::new();
+            for entry in new_entries {
+                builder.insert(&entry.path, entry.id);
+            }
+            builder
+        },
+    };
+    // FIXME: HashSet of Cow<'_, String> ???
+    let mut existing_names: HashSet<String> = lookup
+        .old_path_to_id
+        .keys()
+        .cloned()
+        .map(String::from)
+        .collect();
+    let mut ops = Vec::<FsOp>::new();
+    let mut locked = HashSet::<u64>::new();
+    let mut dirty = HashMap::<u64, FsOp>::new();
+    let mut processed = HashSet::<u64>::new();
+    fn process<'a>(
+        id: u64,
+        existing_names: &mut HashSet<String>,
+        ops: &mut Vec<FsOp<'a>>,
+        processed: &mut HashSet<u64>,
+        locked: &mut HashSet<u64>,
+        dirty: &mut HashMap<u64, FsOp<'a>>,
+        lookup: &Lookup<'a>,
+    ) {
+        if processed.contains(&id) {
+            return;
+        }
+        let old_path = lookup.old_id_to_path.get(&id).unwrap();
+        locked.insert(id);
+        // copy to new entries
+        let new_paths = Vec::new();
+        let new_paths = lookup.new_id_to_paths.get(&id).unwrap_or(&new_paths);
+        for new_path in new_paths {
+            if old_path == new_path {
+                continue;
+            }
+            if let Some(existing_id_at_new_path) = lookup.old_path_to_id.get(*new_path) {
+                if locked.contains(existing_id_at_new_path) {
+                    // cycle detected, push to dirty list
+                    let backup_path = gen_backup_path(old_path, &existing_names);
+                    assert!(existing_names.insert(backup_path.clone()));
+                    ops.push(FsOp::CopyFile {
+                        src: Cow::Borrowed(old_path),
+                        dst: Cow::Owned(backup_path.clone()),
+                    });
+                    dirty.insert(
+                        *existing_id_at_new_path,
+                        FsOp::CopyFile {
+                            src: Cow::Owned(backup_path),
+                            dst: Cow::Borrowed(new_path),
+                        },
+                    );
+                } else {
+                    process(
+                        *existing_id_at_new_path,
+                        existing_names,
+                        ops,
+                        processed,
+                        locked,
+                        dirty,
+                        lookup,
+                    );
+                }
+            }
+            ops.push(FsOp::CopyFile {
+                src: Cow::Borrowed(old_path),
+                dst: Cow::Borrowed(new_path),
+            })
+        }
+        // keep the original entry?
+        if !new_paths.contains(old_path) {
+            ops.push(FsOp::RemoveFile {
+                path: Cow::Borrowed(old_path),
+            })
+        }
+        locked.remove(&id);
+        // push remaining ops from dirty list
+        if let Some(op) = dirty.remove(&id) {
+            ops.push(op);
+        }
+        processed.insert(id);
+    }
+    for id in lookup.old_id_to_path.keys() {
+        process(
+            *id,
+            &mut existing_names,
+            &mut ops,
+            &mut processed,
+            &mut locked,
+            &mut dirty,
+            &lookup,
+        );
+    }
+    assert!(dirty.is_empty());
+    Ok(ops.into_iter())
+}
+
+fn create_files_ops<'a: 'b, 'b>(new_entries: &'a Vec<Entry>) -> impl Iterator<Item = FsOp<'b>> {
+    new_entries
+        .iter()
+        .filter(|e| e.id.is_none())
+        .map(|e| FsOp::CreateFile {
+            path: Cow::Borrowed(&e.path),
+        })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -152,6 +272,14 @@ mod tests {
         diff_and_apply_ops(
             &vec![entry(1, "a.txt")],
             &vec![entry(1, "a.txt"), entry(1, "b.txt")],
+        )
+    }
+
+    #[test]
+    fn test_copy_an_existing_file_rev() -> Result<()> {
+        diff_and_apply_ops(
+            &vec![entry(2, "b.txt")],
+            &vec![entry(2, "a.txt"), entry(2, "b.txt")],
         )
     }
 
@@ -200,6 +328,8 @@ mod tests {
 
     fn diff_and_apply_ops(old_entries: &Vec<Entry>, new_entries: &Vec<Entry>) -> Result<()> {
         let ops = diff(old_entries, new_entries)?;
+        println!("old: {old_entries:?}");
+        println!("new: {new_entries:?}");
         println!("ops: {ops:?}");
         let mut fs = HashMap::<String, Option<u64>>::new();
         for entry in old_entries {
