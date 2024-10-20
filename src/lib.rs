@@ -6,7 +6,6 @@ mod ui;
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
-    convert::identity,
     env,
 };
 
@@ -45,8 +44,12 @@ fn diff<'a: 'b, 'b>(
     new_entries: &'a Vec<Entry>,
 ) -> Result<Vec<FsOp<'b>>> {
     validate_old_entries(&old_entries);
-    validate_new_entries(&new_entries)?;
-    let copy_rm_move_ops = move_files_around_ops(&old_entries, &new_entries)?;
+    let allowed_ids = old_entries
+        .iter()
+        .map(|e| e.id.unwrap())
+        .collect::<HashSet<u64>>();
+    validate_new_entries(&new_entries, &allowed_ids)?;
+    let copy_rm_move_ops = move_files_around_ops(&old_entries, &new_entries);
     let create_ops = create_files_ops(new_entries);
     let mut ops = Vec::new();
     ops.append(&mut copy_rm_move_ops.collect());
@@ -71,7 +74,14 @@ fn validate_old_entries(entries: &Vec<Entry>) {
     validate_unique_paths(entries).unwrap();
 }
 
-fn validate_new_entries(entries: &Vec<Entry>) -> Result<()> {
+fn validate_new_entries(entries: &Vec<Entry>, allowed_ids: &HashSet<u64>) -> Result<()> {
+    for entry in entries {
+        if let Some(id) = entry.id {
+            if !allowed_ids.contains(&id) {
+                return Err(TreeEditError::InvalidFileId(id));
+            }
+        }
+    }
     validate_unique_paths(entries)?;
     Ok(())
 }
@@ -106,7 +116,7 @@ fn gen_backup_path(path: &str, existing_names: &HashSet<String>) -> String {
 fn move_files_around_ops<'a: 'b, 'b>(
     old_entries: &'a Vec<Entry>,
     new_entries: &'a Vec<Entry>,
-) -> Result<impl Iterator<Item = FsOp<'b>>> {
+) -> impl Iterator<Item = FsOp<'b>> {
     struct Lookup<'a> {
         old_id_to_path: HashMap<u64, &'a str>,
         old_path_to_id: HashMap<&'a str, u64>,
@@ -236,7 +246,7 @@ fn move_files_around_ops<'a: 'b, 'b>(
         );
     }
     assert!(dirty.is_empty());
-    Ok(ops.into_iter())
+    ops.into_iter()
 }
 
 fn create_files_ops<'a: 'b, 'b>(new_entries: &'a Vec<Entry>) -> impl Iterator<Item = FsOp<'b>> {
