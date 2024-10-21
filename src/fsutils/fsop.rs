@@ -79,7 +79,16 @@ pub fn exec(op: &FsOp) -> crate::Result<()> {
             }
             fs::copy(src, dst)?;
         }
-        FsOp::RemoveFile { path } => todo!(),
+        FsOp::RemoveFile { path: path_str } => {
+            // TODO: move to trash
+            let path = Path::new(path_str.as_ref());
+            if !path.exists() {
+                return Err(TreeEditError::FsChanged(DetectedBy::FileNotFound(
+                    path_str.to_string(),
+                )));
+            }
+            fs::remove_file(path)?;
+        }
     }
     Ok(())
 }
