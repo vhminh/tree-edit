@@ -37,7 +37,27 @@ pub fn exec(op: &FsOp) -> crate::Result<()> {
                 .write(true)
                 .open(&path)?;
         }
-        FsOp::MoveFile { src, dst } => todo!(),
+        FsOp::MoveFile {
+            src: src_str,
+            dst: dst_str,
+        } => {
+            let src = Path::new(src_str.as_ref());
+            let dst = Path::new(dst_str.as_ref());
+            if !src.exists() {
+                return Err(TreeEditError::FsChanged(DetectedBy::FileNotFound(
+                    src_str.to_string(),
+                )));
+            }
+            if dst.exists() {
+                return Err(TreeEditError::FsChanged(DetectedBy::FileExists(
+                    dst_str.to_string(),
+                )));
+            }
+            if let Some(dst_parent) = dst.parent() {
+                fs::create_dir_all(dst_parent)?;
+            }
+            fs::rename(src, dst)?;
+        }
         FsOp::CopyFile {
             src: src_str,
             dst: dst_str,

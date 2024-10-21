@@ -165,7 +165,7 @@ fn move_files_around_ops<'a: 'b, 'b>(
         .collect();
     let mut ops = Vec::<FsOp>::new();
     let mut locked = HashSet::<u64>::new();
-    let mut dirty = HashMap::<u64, Vec<FsOp>>::new();
+    let mut dirty = HashMap::<u64, FsOp>::new();
     let mut processed = HashSet::<u64>::new();
     fn process<'a>(
         id: u64,
@@ -173,7 +173,7 @@ fn move_files_around_ops<'a: 'b, 'b>(
         ops: &mut Vec<FsOp<'a>>,
         processed: &mut HashSet<u64>,
         locked: &mut HashSet<u64>,
-        dirty: &mut HashMap<u64, Vec<FsOp<'a>>>,
+        dirty: &mut HashMap<u64, FsOp<'a>>,
         lookup: &Lookup<'a>,
     ) {
         if processed.contains(&id) {
@@ -199,15 +199,10 @@ fn move_files_around_ops<'a: 'b, 'b>(
                     });
                     dirty.insert(
                         *existing_id_at_new_path,
-                        vec![
-                            FsOp::CopyFile {
-                                src: Cow::Owned(backup_path.clone()),
-                                dst: Cow::Borrowed(new_path),
-                            },
-                            FsOp::RemoveFile {
-                                path: Cow::Owned(backup_path),
-                            },
-                        ],
+                        FsOp::MoveFile {
+                            src: Cow::Owned(backup_path),
+                            dst: Cow::Borrowed(new_path),
+                        },
                     );
                     continue;
                 } else {
@@ -236,8 +231,8 @@ fn move_files_around_ops<'a: 'b, 'b>(
         }
         locked.remove(&id);
         // push remaining ops from dirty list
-        if let Some(mut dirty_ops) = dirty.remove(&id) {
-            ops.append(&mut dirty_ops);
+        if let Some(op) = dirty.remove(&id) {
+            ops.push(op);
         }
         processed.insert(id);
     }
