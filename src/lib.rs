@@ -121,7 +121,6 @@ fn move_files_around_ops<'a: 'b, 'b>(
         old_id_to_path: HashMap<u64, &'a str>,
         old_path_to_id: HashMap<&'a str, u64>,
         new_id_to_paths: HashMap<u64, Vec<&'a str>>,
-        new_path_to_id: HashMap<&'a str, Option<u64>>,
     }
     let lookup = Lookup {
         old_id_to_path: {
@@ -145,13 +144,6 @@ fn move_files_around_ops<'a: 'b, 'b>(
                     let v = builder.entry(id).or_insert(Vec::new());
                     v.push(&entry.path);
                 }
-            }
-            builder
-        },
-        new_path_to_id: {
-            let mut builder = HashMap::<&str, Option<u64>>::new();
-            for entry in new_entries {
-                builder.insert(&entry.path, entry.id);
             }
             builder
         },
