@@ -231,6 +231,11 @@ fn move_files_around_ops<'a: 'b, 'b>(
                 });
             }
         }
+        if new_paths.is_empty() {
+            ops.push(FsOp::RemoveFile {
+                path: Cow::Borrowed(old_path),
+            })
+        }
         locked.remove(&id);
         // push remaining ops from dirty list
         if let Some(op) = dirty.remove(&id) {
@@ -279,6 +284,11 @@ mod tests {
             &vec![entry(1, "a.txt")],
             &vec![entry(1, "a.txt"), new_entry("b.txt")],
         )
+    }
+
+    #[test]
+    fn test_remove_1_file() -> Result<()> {
+        diff_and_apply_ops(&vec![entry(1, "a.txt")], &vec![])
     }
 
     #[test]
