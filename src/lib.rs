@@ -176,19 +176,28 @@ fn move_files_around_ops<'a: 'b, 'b>(
         // copy to new entries
         let new_paths = Vec::new();
         let new_paths = lookup.new_id_to_paths.get(&id).unwrap_or(&new_paths);
-        for new_path in new_paths {
-            if old_path == new_path {
-                continue;
-            }
+        let keep_old_path = new_paths.contains(old_path);
+        let mut new_path_iter = new_paths.iter().filter(|p| *p != old_path).peekable();
+        while let Some(new_path) = new_path_iter.next() {
+            // move file if we don't need to keep it at the original location
+            // and this is the last file in the list
+            let move_instead_of_copy = !keep_old_path && new_path_iter.peek().is_none();
             if let Some(existing_id_at_new_path) = lookup.old_path_to_id.get(*new_path) {
                 if locked.contains(existing_id_at_new_path) {
                     // cycle detected, push to dirty list
                     let backup_path = gen_backup_path(old_path, &existing_names);
                     assert!(existing_names.insert(backup_path.clone()));
-                    ops.push(FsOp::CopyFile {
-                        src: Cow::Borrowed(old_path),
-                        dst: Cow::Owned(backup_path.clone()),
-                    });
+                    if move_instead_of_copy {
+                        ops.push(FsOp::MoveFile {
+                            src: Cow::Borrowed(old_path),
+                            dst: Cow::Owned(backup_path.clone()),
+                        });
+                    } else {
+                        ops.push(FsOp::CopyFile {
+                            src: Cow::Borrowed(old_path),
+                            dst: Cow::Owned(backup_path.clone()),
+                        });
+                    }
                     dirty.insert(
                         *existing_id_at_new_path,
                         FsOp::MoveFile {
@@ -210,16 +219,17 @@ fn move_files_around_ops<'a: 'b, 'b>(
                 }
             }
             existing_names.insert(new_path.to_string());
-            ops.push(FsOp::CopyFile {
-                src: Cow::Borrowed(old_path),
-                dst: Cow::Borrowed(new_path),
-            })
-        }
-        // keep the original entry?
-        if !new_paths.contains(old_path) {
-            ops.push(FsOp::RemoveFile {
-                path: Cow::Borrowed(old_path),
-            })
+            if move_instead_of_copy {
+                ops.push(FsOp::MoveFile {
+                    src: Cow::Borrowed(old_path),
+                    dst: Cow::Borrowed(new_path),
+                });
+            } else {
+                ops.push(FsOp::CopyFile {
+                    src: Cow::Borrowed(old_path),
+                    dst: Cow::Borrowed(new_path),
+                });
+            }
         }
         locked.remove(&id);
         // push remaining ops from dirty list
