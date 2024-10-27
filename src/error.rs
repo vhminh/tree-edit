@@ -5,6 +5,7 @@ pub enum TreeEditError {
     DuplicatePath(String),
     InvalidEntry(String),
     InvalidFileId(u64),
+    NoEditorAvailable(),
     EditorExitFailure(process::ExitStatus),
     FsChanged(DetectedBy),
     IOError(io::Error),
@@ -16,6 +17,7 @@ impl Error for TreeEditError {
             TreeEditError::DuplicatePath(_) => None,
             TreeEditError::InvalidEntry(_) => None,
             TreeEditError::InvalidFileId(_) => None,
+            TreeEditError::NoEditorAvailable() => None,
             TreeEditError::EditorExitFailure(_) => None,
             TreeEditError::FsChanged(_) => None,
             TreeEditError::IOError(ref source) => Some(source),
@@ -29,6 +31,7 @@ impl Display for TreeEditError {
             TreeEditError::DuplicatePath(path) => write!(f, "duplicate path {}", path),
             TreeEditError::InvalidEntry(entry) => write!(f, "invalid entry {}", entry),
             TreeEditError::InvalidFileId(id) => write!(f, "invalid file id {}", id),
+            TreeEditError::NoEditorAvailable() => write!(f, "no editor available, try setting $VISUAL or $EDITOR environment variable in your shell"),
             TreeEditError::EditorExitFailure(status) => {
                 write!(f, "editor {}", status)
             }

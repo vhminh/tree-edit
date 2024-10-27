@@ -1,4 +1,5 @@
-use std::{fs, io, process};
+use std::path::PathBuf;
+use std::{env, fs, io, process};
 
 use crate::entry::Entry;
 use crate::error::TreeEditError;
@@ -9,11 +10,7 @@ use crate::fsutils::tmpfile::TmpFile;
 pub fn user_edit_entries(entries: &Vec<Entry>) -> crate::Result<Vec<Entry>> {
     let tmp_file = TmpFile::new(&tmpfile::get_tmp_file_name(), "txt")?;
     fs::write(&tmp_file.path(), entries_to_str(&entries))?;
-    eprintln!("opening file {} in {}", tmp_file.path().display(), "nvim");
-    let exit_code = process::Command::new("nvim")
-        .arg(tmp_file.path().as_os_str())
-        .spawn()?
-        .wait()?;
+    let exit_code = open_in_editor(&tmp_file.path())?;
     if !exit_code.success() {
         return Err(TreeEditError::EditorExitFailure(exit_code));
     }
@@ -61,6 +58,52 @@ fn str_to_entries(s: &str) -> Vec<Entry> {
             Entry::new(maybe_id, path.to_string())
         })
         .collect()
+}
+
+fn open_in_editor(path: &PathBuf) -> crate::Result<process::ExitStatus> {
+    let editors = vec![
+        env::var("VISUAL").ok(),
+        env::var("EDITOR").ok(),
+        Some(String::from("nvim")),
+        Some(String::from("vim")),
+        Some(String::from("vi")),
+        Some(String::from("nano")),
+    ];
+    let editors: Vec<_> = editors.iter().flatten().collect();
+    for editor in editors {
+        match try_open_in_editor(path, &editor)? {
+            Some(exit_status) => return Ok(exit_status),
+            None => (),
+        }
+    }
+    Err(TreeEditError::NoEditorAvailable())
+}
+
+fn try_open_in_editor(
+    path: &PathBuf,
+    executable: &str,
+) -> crate::Result<Option<process::ExitStatus>> {
+    eprintln!("opening file {} in {}", path.display(), executable);
+    match process::Command::new(executable)
+        .arg(path.as_os_str())
+        .spawn()
+        .into()
+    {
+        Ok(mut child) => {
+            // successfully spawn child process
+            let exit_status = child.wait()?;
+            Ok(Some(exit_status))
+        }
+        Err(e) => {
+            if e.kind() == io::ErrorKind::NotFound {
+                // executable not found
+                Ok(None)
+            } else {
+                // error
+                Err(e.into())
+            }
+        }
+    }
 }
 
 pub fn display_ops(ops: &Vec<FsOp>) {
