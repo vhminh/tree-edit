@@ -1,0 +1,18 @@
+name: Fuzz test
+
+on:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fuzz_test:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Run fuzz tests
+      run: time cargo run --bin fuzz
+
