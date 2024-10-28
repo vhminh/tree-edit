@@ -1,6 +1,6 @@
-mod entry;
+pub mod entry;
 mod error;
-mod fsutils;
+pub mod fsutils;
 mod ui;
 
 use std::{
@@ -39,7 +39,7 @@ pub fn tree_edit() -> Result<()> {
     Ok(())
 }
 
-fn diff<'a: 'b, 'b>(
+pub fn diff<'a: 'b, 'b>(
     old_entries: &'a Vec<Entry>,
     new_entries: &'a Vec<Entry>,
 ) -> Result<Vec<FsOp<'b>>> {
