@@ -1,6 +1,6 @@
 # tree-edit
 
-Edit file tree in your editor
+CLI tool to edit file tree using any text editor, inspired by [oil.nvim](https://github.com/stevearc/oil.nvim)
 
 ## Demo
 
