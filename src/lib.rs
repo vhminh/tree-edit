@@ -7,6 +7,7 @@ use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
     env,
+    path::{absolute, Path},
 };
 
 use entry::Entry;
@@ -28,6 +29,7 @@ pub fn tree_edit() -> Result<()> {
         .map(|tuple| entry::Entry::new(Some(tuple.0 as u64), tuple.1))
         .collect();
     let new_entries = ui::user_edit_entries(&entries)?;
+    let new_entries = normalize_entries(&new_entries)?;
     let ops = diff(&entries, &new_entries)?;
     ui::display_ops(&ops);
     if ops.is_empty() {
@@ -37,6 +39,23 @@ pub fn tree_edit() -> Result<()> {
         eprintln!("successfully applied {} operation(s)", ops.len())
     }
     Ok(())
+}
+
+fn normalize_entries(entries: &Vec<Entry>) -> Result<Vec<Entry>> {
+    entries
+        .iter()
+        .map(|e| {
+            Ok(Entry {
+                id: e.id,
+                path: normalize_path(&e.path)?,
+            })
+        })
+        .collect()
+}
+
+fn normalize_path(path_str: &str) -> Result<String> {
+    let path = Path::new(path_str);
+    Ok(absolute(path)?.to_string_lossy().to_string())
 }
 
 pub fn diff<'a: 'b, 'b>(
