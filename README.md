@@ -10,7 +10,7 @@ Set `$VISUAL` environment variable in your shell to the editor executable:
 - Nano: `export VISUAL=nano`
 
 ### Syntax
-```sh
+```console
 $ tree-edit --help
 Edit file tree in your editor
 
@@ -25,24 +25,24 @@ Options:
 ```
 
 ### Example
-```
+```console
 $ VISUAL=nvim tree-edit .
 ```
 
 ## Install
 ### From source
-```sh
-> git clone git@github.com:vhminh/tree-edit.git
-> cd tree-edit
-> cargo install --bin tree-edit --path .
+```console
+$ git clone git@github.com:vhminh/tree-edit.git
+$ cd tree-edit
+$ cargo install --bin tree-edit --path .
 ```
 
 ## Dev
 Run unit test
-```sh
+```console
 $ cargo test
 ```
 Run fuzz test
-```sh
+```console
 $ time cargo run --bin fuzz
 ```
