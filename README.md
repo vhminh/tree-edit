@@ -4,6 +4,18 @@ Edit file tree in your editor
 
 ## Demo
 
+Bulk create files
+
+https://github.com/user-attachments/assets/e19072fc-40c1-4a01-a702-022bc5274001
+
+Bulk rename files
+
+https://github.com/user-attachments/assets/efa953d7-4279-40d4-8e58-3f4c5629e36c
+
+Swap 2 files
+
+https://github.com/user-attachments/assets/5ab5e6af-51a4-4b14-b6a4-bff5123976a3
+
 ## Usage
 Set `$VISUAL` environment variable in your shell to the editor executable:
 - Neovim: `export VISUAL=nvim`
