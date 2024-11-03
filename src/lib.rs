@@ -6,8 +6,7 @@ mod ui;
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
-    env,
-    path::{absolute, Path},
+    path::{absolute, Path, PathBuf},
 };
 
 use entry::Entry;
@@ -16,9 +15,8 @@ use fsutils::fsop::FsOp;
 
 pub type Result<T> = std::result::Result<T, TreeEditError>;
 
-pub fn tree_edit() -> Result<()> {
-    let current_dir = env::current_dir()?;
-    let paths = fsutils::get_paths_recursively(&current_dir)?;
+pub fn tree_edit(dir: &PathBuf) -> Result<()> {
+    let paths = fsutils::get_paths_recursively(&dir)?;
     let paths: Vec<String> = paths
         .iter()
         .map(|p| String::from(p.to_string_lossy()))
