@@ -26,14 +26,16 @@ Set `$VISUAL` environment variable in your shell to the editor executable:
 $ tree-edit --help
 Edit file tree in your editor
 
-Usage: tree-edit [DIR]
+Usage: tree-edit [OPTIONS] [DIR]
 
 Arguments:
   [DIR]  Directory to operate on, default to current working directory
 
 Options:
-  -h, --help     Print help
-  -V, --version  Print version
+      --no-git-ignore  When set, .gitignore will not be respected
+      --hidden         Include hidden files
+  -h, --help           Print help
+  -V, --version        Print version
 ```
 
 ### Example
