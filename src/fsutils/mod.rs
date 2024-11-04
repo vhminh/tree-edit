@@ -1,22 +1,21 @@
 pub mod fsop;
 pub mod tmpfile;
 
-use std::{fs, io, path};
+use std::path::PathBuf;
 
-pub fn get_paths_recursively(p: &path::PathBuf) -> io::Result<Vec<path::PathBuf>> {
-    let mut result: Vec<path::PathBuf> = Vec::new();
-    fn process(p: &path::PathBuf, result: &mut Vec<path::PathBuf>) -> io::Result<()> {
-        let entries = fs::read_dir(p)?;
-        for entry in entries {
-            let path = entry?.path();
-            if path.is_dir() {
-                process(&path, result)?;
-            } else {
-                result.push(path);
+use ignore;
+
+pub fn get_paths_recursively(p: &PathBuf) -> Vec<PathBuf> {
+    ignore::WalkBuilder::new(p)
+        .hidden(true)
+        .build()
+        .into_iter()
+        .filter_map(|result| match result {
+            Ok(dir_entry) => Some(PathBuf::from(dir_entry.path())),
+            Err(err) => {
+                eprintln!("{err}");
+                None
             }
-        }
-        Ok(())
-    }
-    process(p, &mut result)?;
-    Ok(result)
+        })
+        .collect()
 }

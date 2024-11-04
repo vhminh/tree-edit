@@ -8,3 +8,4 @@ default-run = "tree-edit"
 rand = "0.8.4"
 anyhow = "1.0"
 clap = { version = "4.5.20", features = ["derive"] }
+ignore = "0.4.23"

@@ -16,7 +16,7 @@ use fsutils::fsop::FsOp;
 pub type Result<T> = std::result::Result<T, TreeEditError>;
 
 pub fn tree_edit(dir: &PathBuf) -> Result<()> {
-    let paths = fsutils::get_paths_recursively(&dir)?;
+    let paths = fsutils::get_paths_recursively(&dir);
     let paths: Vec<String> = paths
         .iter()
         .map(|p| String::from(p.to_string_lossy()))
