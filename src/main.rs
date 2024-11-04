@@ -24,7 +24,10 @@ fn collect_files(dir: &PathBuf, respect_git_ignore: bool, ignore_hidden: bool) -
         .build()
         .into_iter()
         .filter_map(|result| match result {
-            Ok(dir_entry) => Some(PathBuf::from(dir_entry.path())),
+            Ok(dir_entry) => match dir_entry.file_type() {
+                Some(file_type) if !file_type.is_dir() => Some(PathBuf::from(dir_entry.path())),
+                _ => None,
+            },
             Err(err) => {
                 eprintln!("{err}");
                 None
