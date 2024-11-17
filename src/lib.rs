@@ -6,6 +6,7 @@ mod ui;
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
+    panic,
     path::{absolute, Path, PathBuf},
 };
 
@@ -28,6 +29,12 @@ pub fn tree_edit(paths: &Vec<PathBuf>) -> Result<()> {
     let new_entries = ui::user_edit_entries(&entries)?;
     let new_entries = normalize_entries(&new_entries)?;
     let ops = diff(&entries, &new_entries)?;
+    panic::catch_unwind(|| verify(&entries, &new_entries, &ops)).expect(concat!(
+        "internal verification failed, ",
+        "this is likely due to a bug in the implementation, ",
+        "please submit an issue here: ",
+        "https://github.com/vhminh/tree-edit/issues/new"
+    ));
     ui::display_ops(&ops);
     if ops.is_empty() {
         eprintln!("nothing to do")
@@ -283,6 +290,50 @@ fn create_files_ops<'a: 'b, 'b>(new_entries: &'a Vec<Entry>) -> impl Iterator<It
         })
 }
 
+// verify internally that the operations can transform old entries to new ones
+fn verify(old_entries: &Vec<Entry>, new_entries: &Vec<Entry>, ops: &Vec<FsOp>) {
+    let mut entries_after_apply = apply(&old_entries, &ops);
+    let mut new_entries = new_entries.clone();
+
+    new_entries.sort_by(|a, b| a.path.as_str().cmp(b.path.as_str()));
+    entries_after_apply.sort_by(|a, b| a.path.as_str().cmp(b.path.as_str()));
+    assert_eq!(entries_after_apply, new_entries);
+}
+
+pub fn apply(entries: &Vec<Entry>, ops: &Vec<FsOp<'_>>) -> Vec<Entry> {
+    let mut fs = HashMap::<String, Option<u64>>::new();
+    for entry in entries {
+        assert_eq!(fs.insert(entry.path.clone(), Some(entry.id.unwrap())), None);
+    }
+    for op in ops {
+        match op {
+            FsOp::CreateFile { path } => {
+                assert!(!fs.contains_key(path.as_ref()));
+                fs.insert(path.to_string(), None);
+            }
+            FsOp::MoveFile { src, dst } => {
+                assert!(fs.contains_key(src.as_ref()));
+                assert!(!fs.contains_key(dst.as_ref()));
+                let maybe_id = fs.remove(src.as_ref()).unwrap();
+                fs.insert(dst.to_string(), maybe_id);
+            }
+            FsOp::CopyFile { src, dst } => {
+                assert!(fs.contains_key(src.as_ref()));
+                assert!(!fs.contains_key(dst.as_ref()));
+                let maybe_id = fs.get(src.as_ref()).unwrap().clone();
+                fs.insert(dst.to_string(), maybe_id);
+            }
+            FsOp::RemoveFile { path } => {
+                assert!(fs.contains_key(path.as_ref()));
+                fs.remove(path.as_ref());
+            }
+        }
+    }
+    fs.into_iter()
+        .map(|(path, maybe_id)| -> Entry { Entry::new(maybe_id, path) })
+        .collect::<Vec<_>>()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -371,42 +422,7 @@ mod tests {
         println!("old: {old_entries:?}");
         println!("new: {new_entries:?}");
         println!("ops: {ops:?}");
-        let mut fs = HashMap::<String, Option<u64>>::new();
-        for entry in old_entries {
-            assert_eq!(fs.insert(entry.path.clone(), Some(entry.id.unwrap())), None);
-        }
-        for op in ops {
-            match op {
-                FsOp::CreateFile { path } => {
-                    assert!(!fs.contains_key(path.as_ref()));
-                    fs.insert(path.to_string(), None);
-                }
-                FsOp::MoveFile { src, dst } => {
-                    assert!(fs.contains_key(src.as_ref()));
-                    assert!(!fs.contains_key(dst.as_ref()));
-                    let maybe_id = fs.remove(src.as_ref()).unwrap();
-                    fs.insert(dst.to_string(), maybe_id);
-                }
-                FsOp::CopyFile { src, dst } => {
-                    assert!(fs.contains_key(src.as_ref()));
-                    assert!(!fs.contains_key(dst.as_ref()));
-                    let maybe_id = fs.get(src.as_ref()).unwrap().clone();
-                    fs.insert(dst.to_string(), maybe_id);
-                }
-                FsOp::RemoveFile { path } => {
-                    assert!(fs.contains_key(path.as_ref()));
-                    fs.remove(path.as_ref());
-                }
-            }
-        }
-        let mut entries_after_apply: Vec<_> = fs
-            .into_iter()
-            .map(|(path, maybe_id)| -> Entry { Entry::new(maybe_id, path) })
-            .collect::<Vec<_>>();
-
-        entries_after_apply.sort_by(|a, b| a.path.as_str().cmp(b.path.as_str()));
-
-        assert_eq!(&entries_after_apply, new_entries);
+        verify(old_entries, new_entries, &ops);
         Ok(())
     }
 }

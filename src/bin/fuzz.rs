@@ -1,7 +1,5 @@
-use std::collections::HashMap;
-
 use rand::{rngs::StdRng, RngCore, SeedableRng};
-use tree_edit::{entry::Entry, fsutils::fsop::FsOp};
+use tree_edit::entry::Entry;
 
 fn rand_exp_size(rng: &mut dyn RngCore) -> u64 {
     match rng.next_u64() % 9 {
@@ -43,46 +41,12 @@ fn sort(entries: &mut Vec<Entry>) {
     entries.sort_by(|a, b| a.path.as_str().cmp(b.path.as_str()));
 }
 
-fn apply(entries: &Vec<Entry>, ops: &Vec<FsOp<'_>>) -> Vec<Entry> {
-    let mut fs = HashMap::<String, Option<u64>>::new();
-    for entry in entries {
-        assert_eq!(fs.insert(entry.path.clone(), Some(entry.id.unwrap())), None);
-    }
-    for op in ops {
-        match op {
-            FsOp::CreateFile { path } => {
-                assert!(!fs.contains_key(path.as_ref()));
-                fs.insert(path.to_string(), None);
-            }
-            FsOp::MoveFile { src, dst } => {
-                assert!(fs.contains_key(src.as_ref()));
-                assert!(!fs.contains_key(dst.as_ref()));
-                let maybe_id = fs.remove(src.as_ref()).unwrap();
-                fs.insert(dst.to_string(), maybe_id);
-            }
-            FsOp::CopyFile { src, dst } => {
-                assert!(fs.contains_key(src.as_ref()));
-                assert!(!fs.contains_key(dst.as_ref()));
-                let maybe_id = fs.get(src.as_ref()).unwrap().clone();
-                fs.insert(dst.to_string(), maybe_id);
-            }
-            FsOp::RemoveFile { path } => {
-                assert!(fs.contains_key(path.as_ref()));
-                fs.remove(path.as_ref());
-            }
-        }
-    }
-    fs.into_iter()
-        .map(|(path, maybe_id)| -> Entry { Entry::new(maybe_id, path) })
-        .collect::<Vec<_>>()
-}
-
 fn run(seed: u64) {
     let mut rng = StdRng::seed_from_u64(seed);
     let old_entries = generate_old_entries(&mut rng);
     let new_entries = generate_new_entries(old_entries.len().try_into().unwrap(), &mut rng);
     let ops = tree_edit::diff(&old_entries, &new_entries).unwrap();
-    let entries_after_apply = apply(&old_entries, &ops);
+    let entries_after_apply = tree_edit::apply(&old_entries, &ops);
     let mut new_entries = new_entries;
     let mut entries_after_apply = entries_after_apply;
     sort(&mut new_entries);
