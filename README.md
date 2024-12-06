@@ -58,5 +58,5 @@ $ cargo test
 ```
 Run fuzz test
 ```console
-$ time cargo run --bin fuzz
+$ time cargo run --release --bin fuzz
 ```
