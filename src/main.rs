@@ -1,6 +1,6 @@
 use clap::Parser;
 use std::env;
-use std::path::{absolute, PathBuf};
+use std::path::PathBuf;
 
 #[derive(Parser)]
 #[command(version, about = "Edit file tree in your editor")]
@@ -17,8 +17,8 @@ struct CliArg {
     hidden: bool,
 }
 
-fn collect_files(dir: &PathBuf, respect_git_ignore: bool, ignore_hidden: bool) -> Vec<PathBuf> {
-    ignore::WalkBuilder::new(dir)
+fn collect_files(respect_git_ignore: bool, ignore_hidden: bool) -> Vec<PathBuf> {
+    ignore::WalkBuilder::new(".")
         .git_ignore(respect_git_ignore)
         .hidden(ignore_hidden)
         .build()
@@ -38,11 +38,11 @@ fn collect_files(dir: &PathBuf, respect_git_ignore: bool, ignore_hidden: bool) -
 
 fn main() -> anyhow::Result<()> {
     let args: CliArg = CliArg::parse();
-    let dir = match args.dir {
-        Some(dir) => absolute(dir)?,
-        None => absolute(env::current_dir()?)?,
-    };
-    let paths = collect_files(&dir, !args.no_git_ignore, !args.hidden);
+    if let Some(ref dir) = args.dir {
+        // no need to reset, app exit right after anyway
+        env::set_current_dir(dir)?;
+    }
+    let paths = collect_files(!args.no_git_ignore, !args.hidden);
     tree_edit::tree_edit(&paths)?;
     Ok(())
 }
