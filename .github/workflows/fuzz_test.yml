@@ -14,5 +14,5 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Run fuzz tests
-      run: time cargo run --bin fuzz
+      run: time cargo run --release --bin fuzz
 
