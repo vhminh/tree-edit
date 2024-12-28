@@ -1,6 +1,16 @@
 # tree-edit
 
-CLI tool to edit file tree using any text editor, inspired by [oil.nvim](https://github.com/stevearc/oil.nvim)
+CLI tool to edit file system tree using a text editor, inspired by [oil.nvim](https://github.com/stevearc/oil.nvim)
+
+- List all files in the directory recursively and write the list into a temporary file.
+
+- Open the temporary file in the text editor (configured by the user with `$VISUAL` or `$EDITOR`).
+
+- User edits the content of the buffer to reflect the desired state.
+
+- Upon saving, determine the necessary file system operations (create/copy/move/delete) to transform the initial file tree into the new one.
+
+- If the user confirms, apply those operations.
 
 ## Demo
 
@@ -17,14 +27,14 @@ Swap 2 files
 https://github.com/user-attachments/assets/5ab5e6af-51a4-4b14-b6a4-bff5123976a3
 
 ## Usage
-Set `$VISUAL` environment variable in your shell to the editor executable:
+Set `$VISUAL` or `$EDITOR` environment variable to your editor of choice:
 - Neovim: `export VISUAL=nvim`
 - Nano: `export VISUAL=nano`
 
 ### Syntax
 ```console
 $ tree-edit --help
-Edit file tree in your editor
+Edit file system tree using a text editor
 
 Usage: tree-edit [OPTIONS] [DIR]
 

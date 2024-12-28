@@ -3,7 +3,7 @@ use std::env;
 use std::path::PathBuf;
 
 #[derive(Parser)]
-#[command(version, about = "Edit file tree in your editor")]
+#[command(version, about = "Edit file system tree using a text editor")]
 struct CliArg {
     /// Directory to operate on, default to current working directory
     dir: Option<PathBuf>,
